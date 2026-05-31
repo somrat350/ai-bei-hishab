@@ -4,7 +4,6 @@ import { authOptions } from "../auth/[...nextauth]/route";
 import dbConnect from "../../../../lib/mongodb";
 import Income from "../../../../models/Income";
 import Expense from "../../../../models/Expense";
-import Savings from "../../../../models/Savings";
 
 export async function GET(req) {
   try {
@@ -22,7 +21,6 @@ export async function GET(req) {
 
     const incomeQuery = { userId };
     const expenseQuery = { userId };
-    const savingsQuery = { userId };
 
     if (search) {
       const searchRegex = new RegExp(search, "i");
@@ -37,37 +35,34 @@ export async function GET(req) {
         const year = parseInt(parts[0], 10);
         const month = parseInt(parts[1], 10) - 1; // JS months are 0-indexed
         const day = parseInt(parts[2], 10);
-        
+
         const startOfDay = new Date(year, month, day);
         const endOfDay = new Date(year, month, day, 23, 59, 59, 999);
         const dateFilter = { $gte: startOfDay, $lte: endOfDay };
-        
+
         incomeQuery.date = dateFilter;
         expenseQuery.date = dateFilter;
-        savingsQuery.date = dateFilter;
       } else if (parts.length === 2) {
         // YYYY-MM (Specific Month)
         const year = parseInt(parts[0], 10);
         const month = parseInt(parts[1], 10) - 1;
-        
+
         const startOfMonth = new Date(year, month, 1);
         const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59, 999);
         const dateFilter = { $gte: startOfMonth, $lte: endOfMonth };
-        
+
         incomeQuery.date = dateFilter;
         expenseQuery.date = dateFilter;
-        savingsQuery.date = dateFilter;
       } else if (parts.length === 1) {
         // YYYY (Specific Year)
         const year = parseInt(parts[0], 10);
-        
+
         const startOfYear = new Date(year, 0, 1);
         const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999);
         const dateFilter = { $gte: startOfYear, $lte: endOfYear };
-        
+
         incomeQuery.date = dateFilter;
         expenseQuery.date = dateFilter;
-        savingsQuery.date = dateFilter;
       }
     }
 
@@ -75,7 +70,6 @@ export async function GET(req) {
     const [incomes, expenses, savings] = await Promise.all([
       Income.find(incomeQuery).sort({ date: -1 }),
       Expense.find(expenseQuery).sort({ date: -1 }),
-      Savings.find(savingsQuery).sort({ date: -1 }),
     ]);
 
     // Savings don't have source/destination, so exclude them if a search is performed
@@ -83,23 +77,29 @@ export async function GET(req) {
 
     // Calculate totals
     const totalIncome = incomes.reduce((sum, record) => sum + record.amount, 0);
-    const totalExpense = expenses.reduce((sum, record) => sum + record.amount, 0);
-    const totalSavings = filteredSavings.reduce((sum, record) => sum + record.amount, 0);
+    const totalExpense = expenses.reduce(
+      (sum, record) => sum + record.amount,
+      0,
+    );
 
-    return NextResponse.json({
-      totals: {
-        totalIncome,
-        totalExpense,
-        totalSavings,
+    return NextResponse.json(
+      {
+        totals: {
+          totalIncome,
+          totalExpense,
+        },
+        records: {
+          incomes,
+          expenses,
+        },
       },
-      records: {
-        incomes,
-        expenses,
-        savings: filteredSavings,
-      },
-    }, { status: 200 });
+      { status: 200 },
+    );
   } catch (error) {
     console.error("GET Dashboard error:", error);
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+    return NextResponse.json(
+      { message: "Internal server error" },
+      { status: 500 },
+    );
   }
 }
